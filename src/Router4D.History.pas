@@ -16,7 +16,9 @@ uses
   {$ENDIF}
   System.Generics.Collections,
   Router4D.Interfaces,
-  Router4D.Props;
+  Router4D.Props,
+  Router4D.Exceptions,
+  Router4D.Logger;
 
 type
   TCachePersistent = record
@@ -218,27 +220,35 @@ var
   vObject : TObject;
 begin
   if not Supports(aObject, iRouter4DComponent, Result) then
-    raise Exception.Create('Form not Implement iRouter4DelphiComponent Interface');
+  begin
+    Router4DLogger.LogError(Format('Component %s does not implement iRouter4DComponent interface', [aObject.ClassName]));
+    raise EComponentInterfaceException.Create(aObject.ClassName, 'iRouter4DComponent');
+  end;
 
   try
     GlobalEventBus.RegisterSubscriber(aObject);
+    Router4DLogger.LogDebug(Format('Registered EventBus subscriber: %s', [aObject.ClassName]));
   except
     on E: Exception do
+    begin
+      Router4DLogger.LogWarning(Format('Failed to register EventBus subscriber %s: %s', [aObject.ClassName, E.Message]));
       // Subscriber already registered or other error - safe to ignore in most cases
-      // but we could log it here if logging system is available
-      ;
+    end;
   end;
 
   if FListCache.Count >= MAX_FRAME_COUNT then
   begin
     // Remove the first (oldest) key from the cache
     mKey := FListCache.Keys.ToArray[0];
+    Router4DLogger.LogDebug(Format('Cache limit reached. Removing oldest item: %s', [mKey]));
     FListCache.Remove(mKey);
   end;
 
-
   if not FListCache.TryGetValue(aKey, vObject) then
+  begin
     FListCache.Add(aKey, aObject);
+    Router4DLogger.LogDebug(Format('Added component to cache: %s (%s)', [aKey, aObject.ClassName]));
+  end;
 
 end;
 
@@ -306,7 +316,13 @@ var
   aPersistentClass :  TCachePersistent;
 begin
   if not FListCache2.TryGetValue(aPath, aPersistentClass) then
-    raise Exception.Create('Not Register Router ' + aPath);
+  begin
+    Router4DLogger.LogError(Format('Route not found: %s', [aPath]));
+    raise ERouteNotFoundException.Create(aPath);
+  end;
+
+  Router4DLogger.LogDebug(Format('Creating instance for route: %s (%s)',
+    [aPath, aPersistentClass.FPersistentClass.ClassName]));
 
   Self.AddHistory(
     aPath,

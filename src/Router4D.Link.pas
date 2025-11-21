@@ -55,7 +55,9 @@ implementation
 uses
   System.SysUtils,
   System.SyncObjs,
-  Router4D.History;
+  Router4D.History,
+  Router4D.Exceptions,
+  Router4D.Logger;
 
 {$IFDEF HAS_FMX}
 function TRouter4DLink.Animation(aAnimation: TProc<TFMXObject>): iRouter4DLink;
@@ -146,7 +148,10 @@ begin
   aContainer := Router4DHistory.GetHistoryContainer(aNameContainer);
 
   if not Assigned(aContainer) then
-    raise Exception.CreateFmt('Container "%s" not found', [aNameContainer]);
+  begin
+    Router4DLogger.LogError(Format('Container "%s" not found', [aNameContainer]));
+    raise EInvalidContainerException.Create(aNameContainer);
+  end;
 
   {$IFDEF HAS_FMX}
   if aContainer.ChildrenCount > 0 then
@@ -154,6 +159,8 @@ begin
   {$ELSE}
   aContainer.RemoveObject;
   {$ENDIF}
+
+  Router4DLogger.LogNavigation('', aPatch);
 
   aContainer
     .AddObject(
@@ -180,10 +187,15 @@ begin
 end;
 
 function TRouter4DLink.GoBack : iRouter4DLink;
+var
+  LBackRoute: string;
 begin
   Result := Self;
   if not Assigned(Router4DHistory.MainRouter) then
-    raise Exception.Create('MainRouter not configured');
+  begin
+    Router4DLogger.LogError('Cannot go back: MainRouter not configured');
+    raise EInvalidContainerException.Create('MainRouter');
+  end;
 
   {$IFDEF HAS_FMX}
   if Router4DHistory.MainRouter.ChildrenCount > 0 then
@@ -192,11 +204,15 @@ begin
   Router4DHistory.MainRouter.RemoveObject;
   {$ENDIF}
   Router4DHistory.InstanteObject.UnRender;
+
+  LBackRoute := Router4DHistory.GoBack;
+  Router4DLogger.LogInfo(Format('Going back to: %s', [LBackRoute]));
+
   Router4DHistory
   .MainRouter
     .AddObject(
       Router4DHistory
-        .GetHistory(Router4DHistory.GoBack)
+        .GetHistory(LBackRoute)
         .Render
     );
 
@@ -207,7 +223,12 @@ function TRouter4DLink.IndexLink(aPatch: String): iRouter4DLink;
 begin
   Result := Self;
   if not Assigned(Router4DHistory.IndexRouter) then
-    raise Exception.Create('IndexRouter not configured');
+  begin
+    Router4DLogger.LogError('Cannot navigate: IndexRouter not configured');
+    raise EInvalidContainerException.Create('IndexRouter');
+  end;
+
+  Router4DLogger.LogNavigation('', Format('%s (IndexRouter)', [aPatch]));
 
   {$IFDEF HAS_FMX}
   if Router4DHistory.IndexRouter.ChildrenCount > 0 then
@@ -233,10 +254,18 @@ function TRouter4DLink.&To(aPatch: String) : iRouter4DLink;
 begin
   Result := Self;
   if aPatch.Trim.IsEmpty then
-    raise Exception.Create('Path cannot be empty');
+  begin
+    Router4DLogger.LogError('Navigation failed: Path cannot be empty');
+    raise EInvalidRouteConfigException.Create('Path cannot be empty');
+  end;
 
   if not Assigned(Router4DHistory.MainRouter) then
-    raise Exception.Create('MainRouter not configured');
+  begin
+    Router4DLogger.LogError('Cannot navigate: MainRouter not configured');
+    raise EInvalidContainerException.Create('MainRouter');
+  end;
+
+  Router4DLogger.LogNavigation('', aPatch);
 
   {$IFDEF HAS_FMX}
   if Router4DHistory.MainRouter.ChildrenCount > 0 then
@@ -263,7 +292,12 @@ function TRouter4DLink.&To(aPatch: String; aProps: TProps; aKey : String = '') :
 begin
   Result := Self;
   if not Assigned(Router4DHistory.MainRouter) then
-    raise Exception.Create('MainRouter not configured');
+  begin
+    Router4DLogger.LogError('Cannot navigate: MainRouter not configured');
+    raise EInvalidContainerException.Create('MainRouter');
+  end;
+
+  Router4DLogger.LogNavigation('', Format('%s (with props)', [aPatch]));
 
   {$IFDEF HAS_FMX}
   if Router4DHistory.MainRouter.ChildrenCount > 0 then
