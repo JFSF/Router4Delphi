@@ -52,7 +52,10 @@ implementation
 { TRouter4DLink }
 
 
-uses Router4D.History;
+uses
+  System.SysUtils,
+  System.SyncObjs,
+  Router4D.History;
 
 {$IFDEF HAS_FMX}
 function TRouter4DLink.Animation(aAnimation: TProc<TFMXObject>): iRouter4DLink;
@@ -64,7 +67,8 @@ end;
 function TRouter4DLink.&To( aPatch : String; aComponent : TFMXObject ) : iRouter4DLink;
 begin
   Result := Self;
-  aComponent.RemoveObject(0);
+  if aComponent.ChildrenCount > 0 then
+    aComponent.RemoveObject(0);
   Router4DHistory.InstanteObject.UnRender;
   aComponent
     .AddObject(
@@ -78,7 +82,8 @@ end;
 function TRouter4DLink.&To( aPatch : String; aProps: TProps; aComponent : TFMXObject ) : iRouter4DLink;
 begin
   Result := Self;
-  aComponent.RemoveObject(0);
+  if aComponent.ChildrenCount > 0 then
+    aComponent.RemoveObject(0);
   Router4DHistory.InstanteObject.UnRender;
   aComponent
     .AddObject(
@@ -87,7 +92,7 @@ begin
         .GetHistory(aPatch)
         .Render
     );
-	
+
   GlobalEventBus.Post(aProps);
 end;
 {$ELSE}
@@ -139,8 +144,13 @@ begin
   Result := Self;
   Router4DHistory.InstanteObject.UnRender;
   aContainer := Router4DHistory.GetHistoryContainer(aNameContainer);
+
+  if not Assigned(aContainer) then
+    raise Exception.CreateFmt('Container "%s" not found', [aNameContainer]);
+
   {$IFDEF HAS_FMX}
-  aContainer.RemoveObject(0);
+  if aContainer.ChildrenCount > 0 then
+    aContainer.RemoveObject(0);
   {$ELSE}
   aContainer.RemoveObject;
   {$ENDIF}
@@ -172,8 +182,12 @@ end;
 function TRouter4DLink.GoBack : iRouter4DLink;
 begin
   Result := Self;
+  if not Assigned(Router4DHistory.MainRouter) then
+    raise Exception.Create('MainRouter not configured');
+
   {$IFDEF HAS_FMX}
-  Router4DHistory.MainRouter.RemoveObject(0);
+  if Router4DHistory.MainRouter.ChildrenCount > 0 then
+    Router4DHistory.MainRouter.RemoveObject(0);
   {$ELSE}
   Router4DHistory.MainRouter.RemoveObject;
   {$ENDIF}
@@ -192,8 +206,12 @@ end;
 function TRouter4DLink.IndexLink(aPatch: String): iRouter4DLink;
 begin
   Result := Self;
+  if not Assigned(Router4DHistory.IndexRouter) then
+    raise Exception.Create('IndexRouter not configured');
+
   {$IFDEF HAS_FMX}
-  Router4DHistory.IndexRouter.RemoveObject(0);
+  if Router4DHistory.IndexRouter.ChildrenCount > 0 then
+    Router4DHistory.IndexRouter.RemoveObject(0);
   {$ELSE}
   Router4DHistory.IndexRouter.RemoveObject;
   {$ENDIF}
@@ -207,15 +225,22 @@ begin
     );
 
   if Assigned(FAnimation) then
-  FAnimation(Router4DHistory.IndexRouter);
+    FAnimation(Router4DHistory.IndexRouter);
 
 end;
 
 function TRouter4DLink.&To(aPatch: String) : iRouter4DLink;
 begin
   Result := Self;
+  if aPatch.Trim.IsEmpty then
+    raise Exception.Create('Path cannot be empty');
+
+  if not Assigned(Router4DHistory.MainRouter) then
+    raise Exception.Create('MainRouter not configured');
+
   {$IFDEF HAS_FMX}
-  Router4DHistory.MainRouter.RemoveObject(0);
+  if Router4DHistory.MainRouter.ChildrenCount > 0 then
+    Router4DHistory.MainRouter.RemoveObject(0);
   {$ELSE}
   Router4DHistory.MainRouter.RemoveObject;
   {$ENDIF}
@@ -237,8 +262,12 @@ end;
 function TRouter4DLink.&To(aPatch: String; aProps: TProps; aKey : String = '') : iRouter4DLink;
 begin
   Result := Self;
+  if not Assigned(Router4DHistory.MainRouter) then
+    raise Exception.Create('MainRouter not configured');
+
   {$IFDEF HAS_FMX}
-  Router4DHistory.MainRouter.RemoveObject(0);
+  if Router4DHistory.MainRouter.ChildrenCount > 0 then
+    Router4DHistory.MainRouter.RemoveObject(0);
   {$ELSE}
   Router4DHistory.MainRouter.RemoveObject;
   {$ENDIF}
@@ -263,12 +292,23 @@ end;
 class function TRouter4DLink.New: iRouter4DLink;
 begin
   if not Assigned(Router4DLink) then
-    Router4DLink := Self.Create;
+  begin
+    TMonitor.Enter(TRouter4DLink);
+    try
+      if not Assigned(Router4DLink) then
+        Router4DLink := Self.Create;
+    finally
+      TMonitor.Exit(TRouter4DLink);
+    end;
+  end;
 
   Result := Router4DLink;
 end;
 
 initialization
   Router4DLink := TRouter4DLink.New;
+
+finalization
+  Router4DLink := nil;
 
 end.

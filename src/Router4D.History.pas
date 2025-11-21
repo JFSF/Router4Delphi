@@ -126,12 +126,18 @@ end;
 
 function TRouter4DHistory.PreviousRouter: String;
 begin
-  Result := Self.FListCacheOrder[Self.FIndexCache - 1];
+  if (Self.FIndexCache > 0) and (Self.FIndexCache < Self.FListCacheOrder.Count) then
+    Result := Self.FListCacheOrder[Self.FIndexCache - 1]
+  else
+    Result := '';
 end;
 
 function TRouter4DHistory.GetRouter: String;
 begin
-  Result := Self.FListCacheOrder[Self.FIndexCache];
+  if (Self.FIndexCache >= 0) and (Self.FIndexCache < Self.FListCacheOrder.Count) then
+    Result := Self.FListCacheOrder[Self.FIndexCache]
+  else
+    Result := '';
 end;
 {$ELSE}
 function TRouter4DHistory.MainRouter(aValue: TPanel): TRouter4DHistory;
@@ -183,15 +189,16 @@ var
 begin
   Result := '';
 
- if Self.FIndexCache = -1 then
+  if (Self.FIndexCache < 0) or (Self.FIndexCache >= Self.FListCacheOrder.Count) then
     Exit;
 
- Result := Self.FListCacheOrder[Self.FIndexCache];
+  Result := Self.FListCacheOrder[Self.FIndexCache];
 
- for i := Self.FIndexCache-1 downto 0 do
- begin
-    Result := Self.FListCacheOrder[i] + ADelimiter + Result;
- end;
+  for i := Self.FIndexCache-1 downto 0 do
+  begin
+    if i < Self.FListCacheOrder.Count then
+      Result := Self.FListCacheOrder[i] + ADelimiter + Result;
+  end;
 end;
 
 function TRouter4DHistory.GoBack: String;
@@ -199,7 +206,10 @@ begin
   if Self.FIndexCache > 0 then
     Dec(Self.FIndexCache);
 
- Result := Self.FListCacheOrder[Self.FIndexCache];
+  if (Self.FIndexCache >= 0) and (Self.FIndexCache < Self.FListCacheOrder.Count) then
+    Result := Self.FListCacheOrder[Self.FIndexCache]
+  else
+    Result := '';
 end;
 
 function TRouter4DHistory.AddHistory( aKey : String; aObject : TObject ) : iRouter4DComponent;
@@ -210,14 +220,21 @@ begin
   if not Supports(aObject, iRouter4DComponent, Result) then
     raise Exception.Create('Form not Implement iRouter4DelphiComponent Interface');
 
-  try GlobalEventBus.RegisterSubscriber(aObject); except end;
+  try
+    GlobalEventBus.RegisterSubscriber(aObject);
+  except
+    on E: Exception do
+      // Subscriber already registered or other error - safe to ignore in most cases
+      // but we could log it here if logging system is available
+      ;
+  end;
 
-  if FListCache.Count > MAX_FRAME_COUNT then
-    for mKey in FListCache.Keys do
-    begin
-      FListCache.Remove(mKey);
-      Break;
-    end;
+  if FListCache.Count >= MAX_FRAME_COUNT then
+  begin
+    // Remove the first (oldest) key from the cache
+    mKey := FListCache.Keys.ToArray[0];
+    FListCache.Remove(mKey);
+  end;
 
 
   if not FListCache.TryGetValue(aKey, vObject) then
@@ -276,10 +293,11 @@ begin
   FListCache2 := TDictionary<String, TCachePersistent>.Create;
   FListCacheOrder := TList<String>.Create;
   FMaxCacheHistory := 10;
+  FIndexCache := -1;
   {$IFDEF HAS_FMX}
-  FListCacheContainer := TObjectDictionary<String, TFMXObject>.Create;
+  FListCacheContainer := TObjectDictionary<String, TFMXObject>.Create([]);
   {$ELSE}
-  FListCacheContainer := TObjectDictionary<String, TPanel>.Create;
+  FListCacheContainer := TObjectDictionary<String, TPanel>.Create([]);
   {$ENDIF}
 end;
 

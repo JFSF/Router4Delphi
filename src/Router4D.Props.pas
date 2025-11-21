@@ -84,6 +84,7 @@ type
       FPropObject : TObject;
       FPropDateTime : TDateTime;
       FKey : String;
+      FOwnsObject : Boolean;
     public
       constructor Create;
       destructor Destroy; override;
@@ -97,7 +98,7 @@ type
       function PropDouble : Double; overload;
       function PropValue ( aProp : TValue ) : TProps; overload;
       function PropValue : TValue; overload;
-      function PropObject ( aProp : TObject ) : TProps; overload;
+      function PropObject ( aProp : TObject; AOwnsObject : Boolean = True ) : TProps; overload;
       function PropObject : TObject; overload;
       function PropDateTime ( aProp : TDateTime ) : TProps; overload;
       function PropDateTime : TDateTime; overload;
@@ -170,12 +171,13 @@ end;
 
 constructor TProps.Create;
 begin
-
+  FOwnsObject := True;
 end;
 
 destructor TProps.Destroy;
 begin
-
+  if FOwnsObject and Assigned(FPropObject) then
+    FPropObject.Free;
   inherited;
 end;
 
@@ -233,10 +235,11 @@ begin
   Result := FPropObject;
 end;
 
-function TProps.PropObject(aProp: TObject): TProps;
+function TProps.PropObject(aProp: TObject; AOwnsObject: Boolean = True): TProps;
 begin
   Result := Self;
   FPropObject := aProp;
+  FOwnsObject := AOwnsObject;
 end;
 
 function TProps.PropInteger(aProp: Integer): TProps;

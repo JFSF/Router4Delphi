@@ -58,7 +58,8 @@ begin
 
   if Assigned(FParent) then
   begin
-    aComponent.RemoveObject(0);
+    if aComponent.ChildrenCount > 0 then
+      aComponent.RemoveObject(0);
     aComponent.AddObject(FParent.Render);
   end;
 end;
